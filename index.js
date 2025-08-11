@@ -9,9 +9,9 @@ const io = new Server(server, { cors: { origin: '*' } });
 const activeNodes = new Map();
 
 io.on('connection', (socket) => {
-  nodeId = socket.handshake.auth.node_id || generateRandomId();
+  const nodeId = socket.handshake.auth.node_id || generateRandomId();
   console.log(`📡 Nodo conectado: ${nodeId}`);
-  activeNodes.set(nodeId, {node_socket: socket,node_status:socket.handshake.auth.status});
+  activeNodes.set(nodeId, socket);
 
   // Enviar lista de nodos activos al nuevo nodo
   //socket.emit('nodes', Array.from(activeNodes.keys()));
@@ -26,28 +26,25 @@ io.on('connection', (socket) => {
   socket.on('get_nodes',(data)=>{
     const target = activeNodes.get(data.target);
     if (target) {
-      const nodes = Array.from(activeNodes.keys());
-      
-      target.node_socket.emit('nodes', nodes.filter((x) => x.node_status == target.node_status));
+      target.emit('nodes', Array.from(activeNodes.keys()));
     }
   });
 
   // 🔁 Reenviar offer
   socket.on('offer', (data) => {
-    const target = activeNodes.get(data.target).node_socket;
+    const target = activeNodes.get(data.target);
     if (target) {
       target.emit('offer', {
         sender: nodeId,
         sdp: data.sdp,
         type: data.type,
-        status: data.status
       });
     }
   });
 
   // 🔁 Reenviar answer
   socket.on('answer', (data) => {
-    const target = activeNodes.get(data.target).node_socket;
+    const target = activeNodes.get(data.target);
     if (target) {
       target.emit('answer', {
         sender: nodeId,
@@ -57,18 +54,9 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('updateStatus', (data) => {
-    const node = activeNodes.get(data.target);
-    if (node) {
-      node.node_status = data.status;
-    } else {
-      console.warn(`Nodo no encontrado: ${data.target}`);
-    }
-  });
-
   // 🔁 Reenviar ICE candidates
   socket.on('ice_candidate', (data) => {
-    const target = activeNodes.get(data.target).node_socket;
+    const target = activeNodes.get(data.target);
     if (target) {
       target.emit('ice_candidate', {
         sender: nodeId,
